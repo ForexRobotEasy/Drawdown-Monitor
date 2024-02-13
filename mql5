@@ -1,0 +1,93 @@
+mql5
+//+------------------------------------------------------------------+
+//|                                                 Drawdown Monitor |
+//|                                       Developed by Forex Robot Easy Team |
+//|                                          Website: forexroboteasy.com |
+//+------------------------------------------------------------------+
+
+#include <Trade\Trade.mqh>
+#include <Notifications\Notifiers\EmailNotifier.mqh>
+
+// Maximum daily drawdown percentage
+double MaxDailyDrawdown = 5.0;
+
+// Global variables
+datetime lastCheckTime = 0;
+double initialBalance = 0;
+double maxEquity = 0;
+bool isMaxDrawdownReached = false;
+
+// Email notifier
+CEmailNotifier emailNotifier;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Get initial account balance
+   initialBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+   
+   // Initialize email notifier
+   emailNotifier.Init();
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // Clean up resources
+   emailNotifier.Deinit();
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Get current account equity
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   
+   // Calculate drawdown percentage
+   double drawdownPercentage = (equity - initialBalance) / initialBalance * 100;
+   
+   // Check if maximum drawdown is reached
+   if (drawdownPercentage >= MaxDailyDrawdown && !isMaxDrawdownReached)
+   {
+      // Close all open positions
+      CTrade trade;
+      trade.PositionCloseAll();
+      
+      // Delete all pending orders
+      trade.OrderDeleteAll();
+      
+      // Send email notification
+      emailNotifier.Send('Maximum drawdown reached', 'Closing all positions and deleting pending orders.');
+      
+      // Set max drawdown reached flag
+      isMaxDrawdownReached = true;
+   }
+   
+   // Check if equity has reached a new maximum
+   if (equity > maxEquity)
+   {
+      maxEquity = equity;
+      isMaxDrawdownReached = false;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert start function                                            |
+//+------------------------------------------------------------------+
+void OnStart()
+{
+   // Check drawdown every 5 minutes
+   if (TimeCurrent() - lastCheckTime >= 5 * 60)
+   {
+      OnTick();
+      lastCheckTime = TimeCurrent();
+   }
+}
